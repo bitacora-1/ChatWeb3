@@ -4,47 +4,35 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Chat Web3</title>
-
-  <!-- Import map for CDN libs -->
-  <script type="importmap">
-  {
-    "imports": {
-      "ethers": "https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js",
-      "Web3Modal": "https://cdn.jsdelivr.net/npm/web3modal@1.9.8/dist/index.js",
-      "WalletConnectProvider": "https://cdn.jsdelivr.net/npm/@walletconnect/web3-provider@1.8.0/dist/umd/index.min.js"
-    }
-  }
-  </script>
-
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
-
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Ethers -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <!-- WalletConnect provider (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/@walletconnect/web3-provider@1.8.0/dist/umd/index.min.js"></script>
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 </head>
 <body>
-  <header class="topbar">
+  <header class="header">
     <h1>Chat Web3</h1>
-    <div id="addressBadge" class="address-badge hidden" title=""></div>
+    <div id="addrShort" class="addrShort">No conectado</div>
   </header>
 
-  <main id="main" class="center">
-    <!-- Initial connect area -->
-    <div id="connectContainer" class="connect-wrap fade-in">
-      <button id="connectBtn" class="connect-btn">Conectar Wallet</button>
+  <main class="main">
+    <div id="connectArea" class="centerCard">
+      <button id="connectBtn" class="btn">Conectar Wallet</button>
     </div>
 
-    <!-- Chat area (hidden until connected) -->
-    <section id="chatContainer" class="chat-wrap hidden">
-      <div id="messages" class="messages" aria-live="polite"></div>
-
-      <form id="composer" class="composer" autocomplete="off">
-        <input id="msgInput" class="msg-input" type="text" placeholder="Escribe un mensaje..." required />
-        <button class="send-btn" type="submit">Enviar</button>
+    <div id="chatArea" class="chatContainer hidden">
+      <div id="messages" class="messages"></div>
+      <form id="form" class="form">
+        <input id="input" autocomplete="off" placeholder="Escribe un mensaje..." />
+        <button>Enviar</button>
       </form>
-    </section>
+    </div>
   </main>
 
-  <script type="module" src="app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
-

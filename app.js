@@ -1,160 +1,126 @@
-/* ...existing code... */
-
-/* app.js - Web3 connect + simple local chat using connected address as username */
-
-import WalletConnectProvider from "WalletConnectProvider";
-import Web3Modal from "Web3Modal";
-import { ethers } from "ethers";
-
-const connectBtn = document.getElementById('connectBtn');
-const connectContainer = document.getElementById('connectContainer');
-const chatContainer = document.getElementById('chatContainer');
-const addressBadge = document.getElementById('addressBadge');
-const messagesEl = document.getElementById('messages');
-const composer = document.getElementById('composer');
-const msgInput = document.getElementById('msgInput');
-
-let web3Modal;
-let provider;
-let signer;
-let userAddress;
-
-/* Initialize Web3Modal with WalletConnect provider option */
-function initWeb3Modal(){
-  const providerOptions = {
-    walletconnect: {
-      package: WalletConnectProvider,
-      options: {
-        infuraId: "1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1" // public demo placeholder; recommend project-specific key in production
-      }
-    }
+// app.js - dependencia: ethers, WalletConnectProvider, firebase compat
+(async () => {
+  // ---- CONFIG FIREBASE: crea un proyecto en https://console.firebase.google.com/
+  // y pega tu objeto firebaseConfig aquí (apiKey, authDomain, databaseURL, ...)
+  const firebaseConfig = {
+    apiKey: "TU_API_KEY",
+    authDomain: "TU_PROYECTO.firebaseapp.com",
+    databaseURL: "https://TU_PROYECTO-default-rtdb.firebaseio.com",
+    projectId: "TU_PROYECTO",
+    storageBucket: "TU_PROYECTO.appspot.com",
+    messagingSenderId: "SENDER_ID",
+    appId: "APP_ID"
   };
+  // ---- FIN CONFIG
 
-  web3Modal = new Web3Modal({
-    cacheProvider: false,
-    providerOptions
-  });
-}
+  // Inicializar Firebase
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
 
-/* Utility: shorten address */
-function shortAddr(addr){
-  if(!addr) return '';
-  return addr.slice(0,6) + '...' + addr.slice(-4);
-}
+  // DOM
+  const connectBtn = document.getElementById('connectBtn');
+  const connectArea = document.getElementById('connectArea');
+  const chatArea = document.getElementById('chatArea');
+  const messagesEl = document.getElementById('messages');
+  const form = document.getElementById('form');
+  const input = document.getElementById('input');
+  const addrShort = document.getElementById('addrShort');
 
-/* Fade helpers */
-function fadeOut(el, cb){
-  el.classList.remove('fade-in');
-  el.classList.add('fade-out');
-  setTimeout(()=>{ el.classList.add('hidden'); el.classList.remove('fade-out'); if(cb) cb(); }, 360);
-}
-function fadeIn(el){
-  el.classList.remove('hidden');
-  el.classList.add('fade-in');
-  setTimeout(()=>el.classList.remove('fade-in'), 380);
-}
+  let provider = null;
+  let signer = null;
+  let userAddress = null;
 
-/* Connect wallet flow */
-async function connectWallet(){
-  try{
-    const externalProvider = await web3Modal.connect();
-    provider = new ethers.providers.Web3Provider(externalProvider);
-    signer = provider.getSigner();
-    userAddress = await signer.getAddress();
-
-    // show address
-    addressBadge.textContent = shortAddr(userAddress);
-    addressBadge.title = userAddress;
-    addressBadge.classList.remove('hidden');
-
-    // hide connect, show chat
-    fadeOut(connectContainer, ()=> {
-      connectContainer.style.display = 'none';
-      chatContainer.classList.remove('hidden');
-      fadeIn(chatContainer);
-      msgInput.focus();
-    });
-
-    // handle account changes
-    externalProvider.on && externalProvider.on('accountsChanged', async (accounts) => {
-      if(accounts && accounts.length){
-        userAddress = accounts[0];
-        addressBadge.textContent = shortAddr(userAddress);
-        addressBadge.title = userAddress;
-      } else {
-        // disconnected
-        resetUI();
-      }
-    });
-
-    externalProvider.on && externalProvider.on('disconnect', ()=> resetUI());
-
-    // greet
-    addSystemMessage(`Conectado como ${shortAddr(userAddress)}`);
-  }catch(err){
-    console.error('connect error', err);
+  // Helpers
+  function short(addr) {
+    if(!addr) return '—';
+    return addr.slice(0,6)+'...'+addr.slice(-4);
   }
-}
 
-function resetUI(){
-  // simple reset: reload to clear provider caches
-  window.location.reload();
-}
+  function showMessage(from, text, mine=false) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'msg ' + (mine ? 'msg-right' : 'msg-left');
+    wrapper.innerHTML = `<div class="who">${short(from)}</div><div class="text">${text}</div>`;
+    messagesEl.appendChild(wrapper);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
 
-/* Messaging (local, in-memory) */
-function createMessageElement({address, text, isMe=false}){
-  const el = document.createElement('div');
-  el.className = 'msg ' + (isMe ? 'me' : 'other');
-  el.innerHTML = `<span class="addr">${address}</span><span class="text">${escapeHtml(text)}</span>`;
-  return el;
-}
+  // WalletConnect provider options
+  const WCProvider = window.WalletConnectProvider?.default || window.WalletConnectProvider;
+  async function connect() {
+    try {
+      // Opción 1: si existe injected provider (Metamask)
+      if (window.ethereum) {
+        provider = new ethers.providers.Web3Provider(window.ethereum, "any");
+        await provider.send("eth_requestAccounts", []);
+      } else {
+        // Opción 2: WalletConnect (QR) - requiere que agregues infuraId o rpc
+        if(!WCProvider) throw new Error('WalletConnectProvider no disponible (CDN).');
+        const wc = new WCProvider({
+          rpc: { 1: 'https://cloudflare-eth.com' }, // usa RPC pública; para producción pon tu nodo/Infura
+          qrcode: true
+        });
+        await wc.enable();
+        provider = new ethers.providers.Web3Provider(wc, "any");
+      }
 
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, (m)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#39;'}[m]));
-}
+      signer = provider.getSigner();
+      userAddress = await signer.getAddress();
+      addrShort.textContent = short(userAddress);
+      // mostrar chat
+      connectArea.classList.add('hidden');
+      chatArea.classList.remove('hidden');
 
-function addSystemMessage(text){
-  const wrapper = document.createElement('div');
-  wrapper.className = 'msg other show';
-  wrapper.style.background = 'transparent';
-  wrapper.style.boxShadow = 'none';
-  wrapper.style.color = 'var(--muted)';
-  wrapper.textContent = text;
-  messagesEl.appendChild(wrapper);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-}
+      // Listen for chain/account changes
+      if (window.ethereum) {
+        window.ethereum.on('accountsChanged', (accs) => {
+          if(accs.length===0) { location.reload(); return; }
+          userAddress = accs[0];
+          addrShort.textContent = short(userAddress);
+        });
+        window.ethereum.on('chainChanged', ()=>{ window.location.reload(); });
+      }
 
-/* Add a message to the UI */
-function pushMessage(address, text, isMe=false){
-  const msgEl = createMessageElement({address, text, isMe});
-  messagesEl.appendChild(msgEl);
-  // small timeout for enter animation
-  setTimeout(()=> msgEl.classList.add('show'), 8);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-}
+      // start listening to firebase messages
+      startListening();
 
-/* Hook events */
-connectBtn.addEventListener('click', async ()=> {
-  await connectWallet();
-});
+    } catch (err) {
+      console.error('Error connecting wallet', err);
+      alert('Error conectando wallet: ' + (err.message || err));
+    }
+  }
 
-composer.addEventListener('submit', (e)=>{
-  e.preventDefault();
-  const text = msgInput.value.trim();
-  if(!text) return;
-  pushMessage(userAddress, text, true);
-  msgInput.value = '';
-  msgInput.focus();
+  connectBtn.addEventListener('click', () => {
+    connect();
+  });
 
-  // Simulate a reply from another address for demo purposes (delayed)
-  setTimeout(()=> {
-    const other = '0x' + Math.random().toString(16).slice(2,10) + '...'+Math.random().toString(16).slice(2,6);
-    pushMessage(other, "Echo: " + text, false);
-  }, 800);
-});
+  // Chat: enviar mensaje a Firebase
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if(!text) return;
+    const payload = {
+      from: userAddress || 'anon',
+      text,
+      ts: Date.now()
+    };
+    // push a Realtime DB
+    db.ref('messages').push(payload).catch(console.error);
+    input.value = '';
+  });
 
-/* Initialize */
-initWeb3Modal();
+  // Escuchar mensajes en realtime
+  function startListening() {
+    const ref = db.ref('messages');
+    ref.off();
+    ref.limitToLast(200).on('child_added', snapshot => {
+      const msg = snapshot.val();
+      if(!msg) return;
+      const mine = (msg.from && userAddress && msg.from.toLowerCase() === userAddress.toLowerCase());
+      showMessage(msg.from || 'anon', msg.text || '', mine);
+    });
+  }
 
-/* ...existing code... */
+  // para debugging rápido:
+  window.__appDebug = { connect, provider: () => provider, signer: () => signer };
 
+})();
